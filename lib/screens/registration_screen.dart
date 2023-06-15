@@ -66,8 +66,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   color: Colors.blueAccent,
                   buttonTitle: 'Register',
                   onPressed: () async {
-                    print(email);
-                    print(password);
                     setState(() {
                       showSpinner = true;
                     });
