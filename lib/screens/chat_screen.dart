@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flash_chat/constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+final _firestore = FirebaseFirestore.instance;
+User loggedInUser;
+
 class ChatScreen extends StatefulWidget {
   static const String id = 'chat_screen';
   @override
@@ -10,10 +13,9 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   TextEditingController messageTextController = TextEditingController();
-  User loggedInUser;
+
   String messageText;
 
   @override
@@ -67,7 +69,7 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            MessageStreamer(),
+            MessageStream(),
             Container(
               decoration: kMessageContainerDecoration,
               child: Row(
@@ -86,8 +88,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   TextButton(
                     onPressed: () {
                       messageTextController.clear();
-                      _firestore.collection('messages').add(
-                          {'sender': loggedInUser.email, 'text': messageText});
+                      _firestore.collection('messages').add({
+                        'timestamp': FieldValue.serverTimestamp(),
+                        'sender': loggedInUser.email,
+                        'text': messageText
+                      });
                     },
                     child: Text(
                       'Send',
@@ -104,7 +109,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-class MessageStreamer extends StatelessWidget {
+class MessageStream extends StatelessWidget {
   final _firestore = FirebaseFirestore.instance;
   @override
   Widget build(BuildContext context) {
@@ -119,24 +124,29 @@ class MessageStreamer extends StatelessWidget {
             ),
           );
         } else {
-          final messages = snapshot.data.docs;
+          final messages = snapshot.data.docs.reversed;
           for (var message in messages) {
             final messageText = message.get('text');
             final messageSender = message.get('sender');
-
-            final messageBubble =
-                MessageBubble(sender: messageSender, text: messageText);
+            final currentUser = loggedInUser.email;
+            final messageBubble = MessageBubble(
+              sender: messageSender,
+              text: messageText,
+              isMe: currentUser == messageSender,
+            );
             messageBubbles.add(messageBubble);
           }
         }
         return Expanded(
           child: ListView(
+            reverse: true,
             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 20),
             children: messageBubbles,
           ),
         );
       },
-      stream: _firestore.collection('messages').snapshots(),
+      stream:
+          _firestore.collection('messages').orderBy('timestamp').snapshots(),
     );
   }
 }
@@ -144,15 +154,17 @@ class MessageStreamer extends StatelessWidget {
 class MessageBubble extends StatelessWidget {
   final String sender;
   final String text;
+  final bool isMe;
 
-  MessageBubble({this.sender, this.text});
+  MessageBubble({this.sender, this.text, this.isMe});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.all(10.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Text(
             sender,
@@ -160,13 +172,23 @@ class MessageBubble extends StatelessWidget {
           ),
           Material(
             elevation: 5.0,
-            borderRadius: BorderRadius.circular(30),
-            color: Colors.lightBlueAccent,
+            borderRadius: isMe
+                ? BorderRadius.only(
+                    topLeft: Radius.circular(30),
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30))
+                : BorderRadius.only(
+                    topRight: Radius.circular(30),
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30)),
+            color: isMe ? Colors.lightBlueAccent : Colors.white,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
               child: Text(
                 text,
-                style: TextStyle(fontSize: 17.0, color: Colors.white),
+                style: TextStyle(
+                    fontSize: 17.0,
+                    color: isMe ? Colors.white : Colors.black87),
               ),
             ),
           ),
